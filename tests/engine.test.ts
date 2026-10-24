@@ -1,0 +1,10 @@
+import {strict as assert} from 'node:assert';
+import {review,compare,validDate} from '../lib/engine.ts';
+const rule={id:'r',name:'Renewal',phrase:'automatically renew',mode:'prohibited' as const,severity:'High' as const,replacement:''};
+assert.equal(review('This will AUTOMATICALLY RENEW.',[rule]).length,1);
+assert.equal(review('No matching phrase',[rule]).length,0);
+assert.equal(review('No matching phrase',[{...rule,mode:'required'}])[0].offset,null);
+assert.equal(compare('A\n\nB','A\n\nC').unchanged,1);
+assert.deepEqual(compare('A\n\nB','A\n\nC').added,['C']);
+assert.equal(validDate('2024-02-29'),true);assert.equal(validDate('2025-02-29'),false);
+console.log('7 engine assertions passed');
