@@ -11,13 +11,15 @@ A private contract review application. This repository contains a working initia
 - Server-side Gemini question answering with source-quote validation when credentials are configured.
 - Responsive review workspace and honest empty/error states. No seeded customer or contract data.
 
-## Runtime
-The immediately hostable version uses Next.js-compatible Vinext on Sites, D1 for records, R2 for originals, and platform-managed private authentication. It does NOT currently use PostgreSQL/pgvector or Supabase. The planned Python/PostgreSQL Zoho deployment remains a separate implementation milestone. Do not deploy this Worker build unchanged to Zoho Slate/AppSail.
+## Hosting on Zoho
+This version uses standard Next.js on Node.js and PostgreSQL. Follow [the Zoho deployment guide](docs/ZOHO_DEPLOYMENT.md) for Slate settings, database migration and protected variables. The earlier Sites/Cloudflare implementation is preserved on the `sites-runtime` branch.
+
+Contract records, originals and audit events are persisted in PostgreSQL. Sign-in uses a configured owner email, scrypt password hash and signed session cookie. This release supports one owner per deployment.
 
 ## Run and build
-Use Node 22.13+ and pnpm. Run `pnpm install --frozen-lockfile`, `pnpm db:generate` only after schema changes, then `pnpm build`. The Sites hosting workflow applies the committed D1 migration. For local development see the starter runtime scripts; private API requests require authenticated platform identity. Never expose the Worker directly with spoofable identity headers.
+Use Node 22.13+ and npm. Run `npm ci`, copy `.env.example` to `.env.local` and fill in private settings, then run `npm run dev`. For schema setup, export `DATABASE_URL` in the terminal and run `npm run db:migrate`; the migration script does not load `.env.local` automatically. Production `npm start` validates configuration and applies the migration before starting Next.js. Run `npm run build` to compile without requiring database credentials.
 
-Run `node --experimental-strip-types tests/engine.test.ts` for rule and comparison regression checks and `pnpm exec tsc --noEmit` for TypeScript validation.
+Run `npm test`, `npm run typecheck` and `npm run build`. Storage tests use embedded PostgreSQL (PGlite) locally; set `TEST_DATABASE_URL` to a disposable PostgreSQL database for real database checks. Never point tests at a live workspace. GitHub Actions uses a disposable PostgreSQL 16 service.
 
 ## Model connection
 Set `GEMINI_API_KEY` and `GEMINI_MODEL` as protected runtime environment variables. No credentials are included in the source or client bundle. Configure suitable provider data handling before uploading confidential documents. AI controls explicitly remain unavailable without the connection.
@@ -37,4 +39,4 @@ Set `GEMINI_API_KEY` and `GEMINI_MODEL` as protected runtime environment variabl
 - Hosted app (owner-private): https://clausewise-contract-review.solariris7.chatgpt.site
 
 ## Remaining production work
-Implement FastAPI/PostgreSQL/pgvector with Alembic; bounded OCR jobs; semantic clause extraction; policy version management and multiple-rule editing; embedding retrieval; secure scheduled notification outbox; evaluated obligation extraction; security/load/restore tests; and verified Zoho deployment.
+Implement the planned FastAPI/pgvector pipeline with Alembic; bounded OCR jobs; semantic clause extraction; policy version management and multiple-rule editing; embedding retrieval; secure scheduled notification outbox; evaluated obligation extraction; security/load/restore tests; and verify the configured Zoho deployment.

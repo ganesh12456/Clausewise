@@ -1,4 +1,23 @@
-import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '../../chatgpt-auth';
-export async function GET(req:Request){const u=await getChatGPTUser();if(!u)return new Response('Unauthorized',{status:401});const id=new URL(req.url).searchParams.get('id');const e=env as any;const row=await e.DB.prepare("SELECT data FROM records WHERE id=? AND owner=? AND kind='contract'").bind(id,u.userId).first();if(!row)return new Response('Not found',{status:404});const o=await e.BUCKET.get(`${u.userId}/${id}`);if(!o)return new Response('File unavailable',{status:404});return new Response(o.body,{headers:{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(JSON.parse(row.data).filename)}`,'X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store'}});}
-export async function POST(req:Request){const u=await getChatGPTUser();if(!u)return Response.json({error:'Sign in required'},{status:401});if(req.headers.get('origin')&&req.headers.get('origin')!==new URL(req.url).origin)return Response.json({error:'Invalid origin'},{status:403});const f=await req.formData();const file=f.get('file') as File;const text=f.get('text') as string;const pages=JSON.parse(String(f.get('pages')||'[]'));if(!file||file.size>20*1024*1024||!text?.trim()||text.length>1500000||!Array.isArray(pages)||pages.length>100)return Response.json({error:'Use a readable PDF, DOCX or TXT under 20 MB and 100 pages.'},{status:400});if(!/\.(pdf|docx|txt)$/i.test(file.name))return Response.json({error:'Unsupported format'},{status:400});const data=await file.arrayBuffer();const bytes=new Uint8Array(data);if(/\.pdf$/i.test(file.name)&&new TextDecoder().decode(bytes.slice(0,5))!=='%PDF-')return Response.json({error:'Invalid PDF'},{status:400});if(/\.docx$/i.test(file.name)&&(bytes[0]!==80||bytes[1]!==75))return Response.json({error:'Invalid DOCX'},{status:400});const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data))).map(x=>x.toString(16).padStart(2,'0')).join('');const id=crypto.randomUUID(),e=env as any;await e.BUCKET.put(`${u.userId}/${id}`,data);try{await e.DB.batch([e.DB.prepare('INSERT INTO records VALUES(?,?,?,?,?,?)').bind(id,u.userId,'contract',JSON.stringify({name:file.name.replace(/\.[^.]+$/,''),filename:file.name,text,pages,sha256:hash,status:'Ready for review',findings:[],notes:'',coverage:String(f.get('coverage')||'Extracted text')}),1,new Date().toISOString()),e.DB.prepare('INSERT INTO events VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),u.userId,'Uploaded contract',file.name,new Date().toISOString())]);}catch(err){await e.BUCKET.delete(`${u.userId}/${id}`);throw err;}return Response.json({id});}
+import {createHash} from 'node:crypto';
+import {database,transaction} from '../../../lib/database';
+import {getUser,sameOrigin} from '../../../lib/auth';
+import {endpoint,HttpError,limitedBody} from '../../../lib/http';
+import {insertDocument} from '../../../lib/storage';
+export const runtime='nodejs';
+export const dynamic='force-dynamic';
+export const GET=endpoint(async req=>{
+ const u=await getUser();if(!u)throw new HttpError('Sign in required',401);
+ const id=new URL(req.url).searchParams.get('id');const row=(await database().query("SELECT r.data,o.content FROM records r JOIN originals o ON r.id=o.id WHERE r.id=$1 AND r.owner=$2 AND r.kind='contract'",[id,u.userId])).rows[0];
+ if(!row)throw new HttpError('Not found',404);
+ return new Response(new Uint8Array(row.content),{headers:{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(row.data.filename)}`,'X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store'}});
+});
+export const POST=endpoint(async req=>{
+ const u=await getUser();if(!u)throw new HttpError('Sign in required',401);if(!sameOrigin(req))throw new HttpError('Invalid origin',403);
+ const raw=await limitedBody(req,30*1024*1024);const f=await new Response(raw,{headers:{'Content-Type':req.headers.get('content-type')||''}}).formData();const file=f.get('file');const text=f.get('text');
+ let pages;try{pages=JSON.parse(String(f.get('pages')||'[]'));}catch{throw new HttpError('Invalid page metadata');}
+ if(!(file instanceof File)||file.size>20*1024*1024||file.name.length>255||typeof text!=='string'||!text.trim()||text.length>1500000||!Array.isArray(pages)||pages.length>100||pages.some(p=>!Number.isInteger(p.page)||p.page<1||typeof p.text!=='string'))throw new HttpError('Use a readable PDF, DOCX or TXT under 20 MB and 100 pages.');
+ if(!/\.(pdf|docx|txt)$/i.test(file.name))throw new HttpError('Unsupported format');
+ const bytes=new Uint8Array(await file.arrayBuffer());if(/\.pdf$/i.test(file.name)&&new TextDecoder().decode(bytes.slice(0,5))!=='%PDF-')throw new HttpError('Invalid PDF');if(/\.docx$/i.test(file.name)&&(bytes[0]!==80||bytes[1]!==75))throw new HttpError('Invalid DOCX');
+ const data={name:file.name.replace(/\.[^.]+$/,''),filename:file.name,text,pages,sha256:createHash('sha256').update(bytes).digest('hex'),status:'Ready for review',findings:[],notes:'',coverage:String(f.get('coverage')||'Extracted text')};
+ return Response.json(await transaction(c=>insertDocument(c,u.userId,file.name,data,bytes)));
+});

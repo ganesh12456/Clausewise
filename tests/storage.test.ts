@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {Pool} from 'pg';
+import {PGlite} from '@electric-sql/pglite';
+import {workspace,saveRecord,insertDocument} from '../lib/storage.ts';
+const pool=process.env.TEST_DATABASE_URL?new Pool({connectionString:process.env.TEST_DATABASE_URL}):null;
+const embedded=pool?null:new PGlite();
+const db:any=pool?await pool.connect():embedded;
+try{
+ const schema=await readFile(new URL('../migrations/001_initial.sql',import.meta.url),'utf8');if(embedded)await embedded.exec(schema);else await db.query(schema);
+ const owner='test-owner',other='other-owner';
+ const doc={name:'Contract',filename:'contract.txt',text:'Payment due in 30 days.',pages:[{page:1,text:'Payment due in 30 days.'}],sha256:'hash',coverage:'Text',findings:[]};
+ const {id}=await insertDocument(db,owner,'contract.txt',doc,Buffer.from(doc.text));
+ assert.equal((await workspace(db,owner)).records.length,1);
+ assert.equal((await workspace(db,other)).records.length,0);
+ await assert.rejects(saveRecord(db,other,{id,kind:'contract',data:doc,revision:1}),{status:404});
+ await saveRecord(db,owner,{id,kind:'contract',data:{...doc,text:'tampered'},revision:1});
+ assert.equal((await workspace(db,owner)).records[0].data.text,doc.text);
+ await assert.rejects(saveRecord(db,owner,{id,kind:'contract',data:doc,revision:1}),{status:409});
+ await assert.rejects(saveRecord(db,owner,{kind:'obligation',data:{name:'Invalid date',date:'2027-02-29',contractId:id}}),{status:400});
+ await saveRecord(db,owner,{kind:'obligation',data:{name:'Renewal',date:'2028-02-29',contractId:id}});
+ assert.equal((await workspace(db,owner)).records.length,2);
+ const original=(await db.query('SELECT content FROM originals WHERE id=$1',[id])).rows[0].content;
+ assert.equal(new TextDecoder().decode(original),doc.text);
+ await saveRecord(db,owner,{id,kind:'contract',action:'delete'});
+ assert.equal((await workspace(db,owner)).records.length,0);
+ assert.equal((await db.query('SELECT * FROM originals WHERE id=$1',[id])).rows.length,0);
+ assert((await workspace(db,owner)).events.length>=4);
+ console.log('11 storage assertions passed ('+(process.env.TEST_DATABASE_URL?'PostgreSQL':'embedded PostgreSQL / PGlite')+')');
+}finally{if(pool){db.release();await pool.end();}else await embedded!.close();}

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {passwordHash,validPassword,issueSession,verifySession} from '../lib/session.ts';
+process.env.SESSION_SECRET='test-secret-for-session-signatures-123456789';
+process.env.OWNER_EMAIL='owner@example.test';
+process.env.OWNER_PASSWORD_HASH=passwordHash('correct horse battery staple');
+assert(validPassword('correct horse battery staple'));
+assert(!validPassword('wrong password'));
+const token=issueSession(1000);
+assert.equal(verifySession(token,1001)?.email,'owner@example.test');
+assert.equal(verifySession(token+'x',1001),null);
+assert.equal(verifySession(token,1000+8*3600),null);
+assert.equal(verifySession('bad.token',1001),null);
+process.env.OWNER_PASSWORD_HASH=passwordHash('rotated owner password');
+assert.equal(verifySession(token,1001),null);
+console.log('7 authentication assertions passed');
