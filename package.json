@@ -11,7 +11,7 @@
     "start": "node scripts/start.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "password:hash": "node scripts/hash-password.mjs",
-    "test": "node --experimental-strip-types tests/engine.test.ts && node --experimental-strip-types tests/auth.test.ts && node --experimental-strip-types tests/storage.test.ts",
+    "test": "node --experimental-strip-types tests/engine.test.ts && node --experimental-strip-types tests/auth.test.ts && node --experimental-strip-types tests/storage.test.ts && node --experimental-strip-types tests/connections.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

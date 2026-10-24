@@ -8,7 +8,8 @@ A private contract review application. This repository contains a working initia
 - Draft/published phrase-check playbooks, source excerpts, editable proposed wording and approve/reject decisions.
 - Paragraph comparison between documents.
 - Confirmed obligations with downloadable calendar reminders.
-- Server-side Gemini question answering with source-quote validation when credentials are configured.
+- Frontend API-key setup with encrypted storage, connection testing, replacement and removal.
+- Server-side Gemini question answering with source-quote validation when a key is saved in Settings.
 - Responsive review workspace and honest empty/error states. No seeded customer or contract data.
 
 ## Hosting on Zoho
@@ -22,7 +23,11 @@ Use Node 22.13+ and npm. Run `npm ci`, copy `.env.example` to `.env.local` and f
 Run `npm test`, `npm run typecheck` and `npm run build`. Storage tests use embedded PostgreSQL (PGlite) locally; set `TEST_DATABASE_URL` to a disposable PostgreSQL database for real database checks. Never point tests at a live workspace. GitHub Actions uses a disposable PostgreSQL 16 service.
 
 ## Model connection
-Set `GEMINI_API_KEY` and `GEMINI_MODEL` as protected runtime environment variables. No credentials are included in the source or client bundle. Configure suitable provider data handling before uploading confidential documents. AI controls explicitly remain unavailable without the connection.
+Sign in and open **Settings → Connect Gemini**. Enter your Gemini API key and model ID, then select **Save API key** and **Test connection**. You can replace or remove the saved key from the same screen. API keys do not need to be added to Zoho environment variables.
+
+The server encrypts keys with AES-256-GCM using a key derived from `SESSION_SECRET`, bound to the owner's account. Status responses never return the key. Keep `SESSION_SECRET` stable and private; if it is rotated, enter the API key again. Keys are not stored in browser local storage. Database, application origin and owner sign-in variables still belong in protected hosting settings.
+
+Testing checks model access without sending a contract or making a generation request. The first contract question checks actual generation availability and quota. Review provider data handling before sending confidential documents.
 
 ## Current limits
 - Scanned PDFs need external OCR; mixed PDFs show a coverage warning. OCR is not implemented in the hosted application.
