@@ -18,6 +18,8 @@ This version uses standard Next.js on Node.js and PostgreSQL. For **Zoho Serverl
 Contract records, originals and audit events are persisted in PostgreSQL. Sign-in uses a configured owner email, scrypt password hash and signed session cookie. This release supports one owner per deployment.
 
 ## Run and build
+For local testing without a hosted database, install/start Docker Desktop, then run `npm ci`, `npm run local:setup` and `npm run local:dev`. Open **http://localhost:3000/login** and sign in as `owner@clausewise.local` with the password you chose. PostgreSQL data persists locally across restarts. See [the local testing guide](docs/LOCAL_TESTING.md) for prerequisites, stop/start commands and existing-database setup.
+
 Use Node 22.13+ and npm. Run `npm ci`, copy `.env.example` to `.env.local` and fill in private settings, then run `npm run dev`. For schema setup, export `DATABASE_URL` in the terminal and run `npm run db:migrate`; the migration script does not load `.env.local` automatically. Production `npm start` validates configuration and applies the migration before starting Next.js. Run `npm run build` to compile without requiring database credentials.
 
 Run `npm test`, `npm run typecheck` and `npm run build`. Storage tests use embedded PostgreSQL (PGlite) locally; set `TEST_DATABASE_URL` to a disposable PostgreSQL database for real database checks. Never point tests at a live workspace. GitHub Actions uses a disposable PostgreSQL 16 service.

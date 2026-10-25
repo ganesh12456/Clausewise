@@ -12,7 +12,12 @@
     "start": "node scripts/start.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "password:hash": "node scripts/hash-password.mjs",
-    "test": "node --experimental-strip-types tests/engine.test.ts && node --experimental-strip-types tests/auth.test.ts && node --experimental-strip-types tests/storage.test.ts && node --experimental-strip-types tests/connections.test.ts && node --experimental-strip-types tests/workflow.test.ts",
+    "local:setup": "node scripts/setup-local.mjs",
+    "db:up": "docker compose --env-file .env.local up -d --wait postgres",
+    "db:down": "docker compose --env-file .env.local down",
+    "db:migrate:local": "node --env-file=.env.local scripts/migrate-local.mjs",
+    "local:dev": "npm run db:up && npm run db:migrate:local && npm run dev -- --host 127.0.0.1",
+    "test": "node --experimental-strip-types tests/engine.test.ts && node --experimental-strip-types tests/auth.test.ts && node --experimental-strip-types tests/storage.test.ts && node --experimental-strip-types tests/connections.test.ts && node --experimental-strip-types tests/workflow.test.ts && node --experimental-strip-types tests/local-setup.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

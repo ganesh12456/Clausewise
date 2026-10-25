@@ -34,3 +34,17 @@ jobs:
           path: dist/clausewise-appsail.zip
           if-no-files-found: error
           retention-days: 14
+      - name: Verify local PostgreSQL setup
+        run: |
+          node --input-type=module -e "import { setupLocal } from './scripts/setup-local.mjs'; await setupLocal(process.cwd(), 'ci-only-local-password');"
+          npm run db:up
+          npm run db:migrate:local
+          npm run db:migrate:local
+          node --env-file=.env.local --input-type=module -e "import { Pool } from 'pg'; import assert from 'node:assert/strict'; const db = new Pool({ connectionString: process.env.DATABASE_URL }); try { const r = await db.query(\"SELECT table_name FROM information_schema.tables WHERE table_schema='public'\"); for (const name of ['records','originals','events','login_attempts','ai_connections']) assert(r.rows.some(row => row.table_name === name), name + ' missing'); console.log('Local PostgreSQL schema ready; repeated migration preserved schema'); } finally { await db.end(); }"
+      - name: Stop local PostgreSQL
+        if: always()
+        run: |
+          if [ -f .env.local ]; then
+            npm run db:down
+            rm .env.local
+          fi
