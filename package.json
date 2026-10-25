@@ -6,12 +6,12 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0",
+    "dev": "node scripts/dev.mjs",
     "build": "node scripts/copy-pdf-worker.mjs && next build --webpack",
     "start": "node scripts/start.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "password:hash": "node scripts/hash-password.mjs",
-    "test": "node --experimental-strip-types tests/engine.test.ts && node --experimental-strip-types tests/auth.test.ts && node --experimental-strip-types tests/storage.test.ts && node --experimental-strip-types tests/connections.test.ts",
+    "test": "node --experimental-strip-types tests/engine.test.ts && node --experimental-strip-types tests/auth.test.ts && node --experimental-strip-types tests/storage.test.ts && node --experimental-strip-types tests/connections.test.ts && node --experimental-strip-types tests/workflow.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

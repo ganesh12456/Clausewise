@@ -5,12 +5,12 @@ A private contract review application. This repository contains a working initia
 ## Implemented
 - PDF, DOCX and TXT upload with browser-side text extraction, private original-file storage and persistent records.
 - Owner-scoped APIs, optimistic concurrency, document deletion and activity history.
-- Draft/published phrase-check playbooks, source excerpts, editable proposed wording and approve/reject decisions.
+- Draft/published company standards with multiple rules, source excerpts, editable proposed wording and recorded clause decisions.
 - Paragraph comparison between documents.
 - Confirmed obligations with downloadable calendar reminders.
 - Frontend API-key setup with encrypted storage, connection testing, replacement and removal.
 - Server-side Gemini question answering with source-quote validation when a key is saved in Settings.
-- Responsive review workspace and honest empty/error states. No seeded customer or contract data.
+- Responsive review desk, agreement register, evidence workspace and honest empty/error states. No seeded customer or contract data.
 
 ## Hosting on Zoho
 This version uses standard Next.js on Node.js and PostgreSQL. Follow [the Zoho deployment guide](docs/ZOHO_DEPLOYMENT.md) for Slate settings, database migration and protected variables. The earlier Sites/Cloudflare implementation is preserved on the `sites-runtime` branch.
@@ -31,7 +31,7 @@ Testing checks model access without sending a contract or making a generation re
 
 ## Current limits
 - Scanned PDFs need external OCR; mixed PDFs show a coverage warning. OCR is not implemented in the hosted application.
-- Playbooks use exact phrase matching, not semantic legal risk classification. One rule is created per playbook in the current editor.
+- Company standards use exact phrase matching, not semantic legal risk classification. Multiple clause rules can be created and edited.
 - Search is keyword-based; vector search is not yet implemented.
 - Comparison is text-based, not a legally validated semantic comparison.
 - Calendar exports work; automatic email delivery and scheduling are not connected.
@@ -41,7 +41,10 @@ Testing checks model access without sending a contract or making a generation re
 
 ## Links
 - Source: https://github.com/ganesh12456/Clausewise
-- Hosted app (owner-private): https://clausewise-contract-review.solariris7.chatgpt.site
+- Earlier Sites preview (previous interface, owner-private): https://clausewise-contract-review.solariris7.chatgpt.site
 
 ## Remaining production work
-Implement the planned FastAPI/pgvector pipeline with Alembic; bounded OCR jobs; semantic clause extraction; policy version management and multiple-rule editing; embedding retrieval; secure scheduled notification outbox; evaluated obligation extraction; security/load/restore tests; and verify the configured Zoho deployment.
+Implement the planned FastAPI/pgvector pipeline with Alembic; bounded OCR jobs; semantic clause extraction; expanded policy lifecycle management; embedding retrieval; secure scheduled notification outbox; evaluated obligation extraction; security/load/restore tests; and verify the configured Zoho deployment.
+
+## Product design and architecture
+See [the storyboard and user flows](docs/PRODUCT_DESIGN.md) for the business journey and responsive design, and [the architecture notes](docs/ARCHITECTURE.md) for frontend ports, application policies, repository boundaries and their verification. The redesign is implemented in the Zoho-compatible `main` branch.
