@@ -27,4 +27,10 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://clausewise:ci-only-password@localhost:5432/clausewise_test
       - run: npm run typecheck
-      - run: npm run build
+      - run: npm run build:appsail
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clausewise-appsail-build
+          path: dist/clausewise-appsail.zip
+          if-no-files-found: error
+          retention-days: 14

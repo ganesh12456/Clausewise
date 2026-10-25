@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/copy-pdf-worker.mjs && next build --webpack",
+    "build:appsail": "node scripts/package-appsail.mjs",
     "start": "node scripts/start.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "password:hash": "node scripts/hash-password.mjs",

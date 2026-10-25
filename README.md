@@ -13,7 +13,7 @@ A private contract review application. This repository contains a working initia
 - Responsive review desk, agreement register, evidence workspace and honest empty/error states. No seeded customer or contract data.
 
 ## Hosting on Zoho
-This version uses standard Next.js on Node.js and PostgreSQL. Follow [the Zoho deployment guide](docs/ZOHO_DEPLOYMENT.md) for Slate settings, database migration and protected variables. The earlier Sites/Cloudflare implementation is preserved on the `sites-runtime` branch.
+This version uses standard Next.js on Node.js and PostgreSQL. For **Zoho Serverless**, follow [the AppSail upload guide](docs/ZOHO_APPSAIL.md); GitHub Actions produces a ready-to-upload build ZIP. Alternatively, follow [the Slate deployment guide](docs/ZOHO_DEPLOYMENT.md). Both require PostgreSQL and protected runtime variables. The earlier Sites/Cloudflare implementation is preserved on the `sites-runtime` branch.
 
 Contract records, originals and audit events are persisted in PostgreSQL. Sign-in uses a configured owner email, scrypt password hash and signed session cookie. This release supports one owner per deployment.
 
