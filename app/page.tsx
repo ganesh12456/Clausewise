@@ -1,7 +1,6 @@
 import Workspace from "./workspace";
 import { getUser } from "../lib/auth";
-import { database } from "../lib/database";
-import { workspace } from "../lib/storage";
+import { services } from "../lib/server/services";
 import { connectionStatus } from "../lib/ai-connections";
 import type { WorkspaceSnapshot } from "../lib/domain/workspace";
 export const dynamic = "force-dynamic";
@@ -11,9 +10,10 @@ export default async function Page() {
   if (!user)
     return <Workspace initial={{ snapshot: empty, requiresSignIn: true }} />;
   try {
+    const backend = await services();
     const [data, ai] = await Promise.all([
-      workspace(database(), user.userId),
-      connectionStatus(database(), user.userId),
+      backend.workspace.load(user.userId),
+      connectionStatus(backend.connections, user.userId),
     ]);
     return (
       <Workspace
@@ -35,7 +35,7 @@ export default async function Page() {
           snapshot: empty,
           requiresSignIn: false,
           error:
-            "Your workspace could not be loaded. Check the database connection and try again.",
+            "Your workspace could not be loaded. Check the Catalyst storage configuration and try again.",
         }}
       />
     );

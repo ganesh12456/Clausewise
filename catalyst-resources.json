@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "environment": "Development",
+  "project_id": "54566000000079016",
+  "organization_id": "60077364156",
+  "tables": {
+    "CWCommits": {
+      "table_id": "54566000000077031",
+      "columns": {
+        "commit_key": {
+          "type": "varchar",
+          "max_length": 100,
+          "unique": true
+        },
+        "owner_key": {
+          "type": "varchar",
+          "max_length": 64
+        },
+        "revision": {
+          "type": "int"
+        },
+        "payload_key": {
+          "type": "varchar",
+          "max_length": 200
+        },
+        "payload_hash": {
+          "type": "varchar",
+          "max_length": 64
+        },
+        "created": {
+          "type": "varchar",
+          "max_length": 40
+        }
+      }
+    },
+    "CWLoginSlots": {
+      "table_id": "54566000000077390",
+      "columns": {
+        "slot_key": {
+          "type": "varchar",
+          "max_length": 100,
+          "unique": true
+        },
+        "owner_key": {
+          "type": "varchar",
+          "max_length": 64
+        },
+        "expires": {
+          "type": "bigint"
+        }
+      }
+    }
+  },
+  "all_columns_mandatory": true,
+  "app_user_permissions": "disabled",
+  "stratus": {
+    "bucket_name": "clausewise-54566000000079016",
+    "type": "protected",
+    "encryption": true,
+    "caching": "disabled",
+    "versioning": false,
+    "provisioning_status": "pending_first_console_activation"
+  }
+}

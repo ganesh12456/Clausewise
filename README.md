@@ -13,21 +13,21 @@ A private contract review application. This repository contains a working initia
 - Responsive review desk, agreement register, evidence workspace and honest empty/error states. No seeded customer or contract data.
 
 ## Hosting on Zoho
-This version uses standard Next.js on Node.js and PostgreSQL. For **Zoho Serverless**, follow [the AppSail upload guide](docs/ZOHO_APPSAIL.md); GitHub Actions produces a ready-to-upload build ZIP. Alternatively, follow [the Slate deployment guide](docs/ZOHO_DEPLOYMENT.md). Both require PostgreSQL and protected runtime variables. The earlier Sites/Cloudflare implementation is preserved on the `sites-runtime` branch.
+The active backend uses **Catalyst Data Store + Stratus**, with the complete Next.js app hosted in **AppSail**. PostgreSQL, Docker Desktop and DATABASE_URL are no longer required. Follow [the native Zoho deployment guide](docs/ZOHO_APPSAIL.md).
 
-Contract records, originals and audit events are persisted in PostgreSQL. Sign-in uses a configured owner email, scrypt password hash and signed session cookie. This release supports one owner per deployment.
+Data Store holds the commit index and durable login-rate slots. Protected Stratus storage holds original files and immutable UTF-8 review snapshots, including owner-encrypted Gemini credentials. This is a single-owner workspace. Review data is limited to 32 MB per snapshot; large enterprise portfolios remain outside this release.
 
-## Run and build
-For local testing without a hosted database, install/start Docker Desktop, then run `npm ci`, `npm run local:setup` and `npm run local:dev`. Open **http://localhost:3000/login** and sign in as `owner@clausewise.local` with the password you chose. PostgreSQL data persists locally across restarts. See [the local testing guide](docs/LOCAL_TESTING.md) for prerequisites, stop/start commands and existing-database setup.
+Development tables have been created. Stratus requires first activation in the signed-in console before bucket creation can finish. The code migration and build do not mean the new AppSail deployment is live. The older Sites runtime remains on `sites-runtime` and has separate data.
 
-Use Node 22.13+ and npm. Run `npm ci`, copy `.env.example` to `.env.local` and fill in private settings, then run `npm run dev`. For schema setup, export `DATABASE_URL` in the terminal and run `npm run db:migrate`; the migration script does not load `.env.local` automatically. Production `npm start` validates configuration and applies the migration before starting Next.js. Run `npm run build` to compile without requiring database credentials.
+## Run and verify
+Use Node.js 22.13+ and npm. Run `npm ci`, `npm test`, `npm run typecheck` and `npm run build`. To produce a Linux x64 upload ZIP, use `npm run build:appsail`; GitHub Actions also publishes that artifact.
 
-Run `npm test`, `npm run typecheck` and `npm run build`. Storage tests use embedded PostgreSQL (PGlite) locally; set `TEST_DATABASE_URL` to a disposable PostgreSQL database for real database checks. Never point tests at a live workspace. GitHub Actions uses a disposable PostgreSQL 16 service.
+Tests use injected storage ports and the installed modular Catalyst SDK's transport. They do not need a local database. Full authenticated testing uses the Catalyst Development AppSail environment; a plain `npm run dev` server can render the signed-out interface but lacks Catalyst runtime credentials. See [testing instructions](docs/LOCAL_TESTING.md).
 
 ## Model connection
 Sign in and open **Settings → Connect Gemini**. Enter your Gemini API key and model ID, then select **Save API key** and **Test connection**. You can replace or remove the saved key from the same screen. API keys do not need to be added to Zoho environment variables.
 
-The server encrypts keys with AES-256-GCM using a key derived from `SESSION_SECRET`, bound to the owner's account. Status responses never return the key. Keep `SESSION_SECRET` stable and private; if it is rotated, enter the API key again. Keys are not stored in browser local storage. Database, application origin and owner sign-in variables still belong in protected hosting settings.
+The server encrypts keys with AES-256-GCM using a key derived from `SESSION_SECRET`, bound to the owner's account. Status responses never return the key. Keep `SESSION_SECRET` stable and private; if it is rotated, enter the API key again. Keys are not stored in browser local storage. Catalyst resource identifiers, application origin and owner sign-in variables still belong in protected hosting settings.
 
 Testing checks model access without sending a contract or making a generation request. The first contract question checks actual generation availability and quota. Review provider data handling before sending confidential documents.
 

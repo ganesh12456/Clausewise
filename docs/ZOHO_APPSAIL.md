@@ -1,62 +1,115 @@
-# Deploy Clausewise in Zoho Serverless AppSail
+# Deploy Clausewise with Catalyst Data Store and Stratus
 
-AppSail runs the complete Next.js app: pages, API routes, sign-in and PostgreSQL access. Use **Serverless → Compute → AppSail**, with a **Catalyst-managed Node.js 22 runtime**. This package is not a static Web Client Hosting upload or a Catalyst Functions bundle.
+The `main` branch now runs entirely on Zoho for application hosting and storage. It requires no PostgreSQL connection, Docker Desktop, or local database installation.
 
-## Get the deployment build
+## What has been provisioned
 
-1. Open [GitHub Actions](https://github.com/ganesh12456/Clausewise/actions), choose the latest successful **Verify Clausewise** run on `main`, and download the **clausewise-appsail-build** artifact.
-2. Extract the downloaded artifact once. It contains **clausewise-appsail.zip**. Upload that inner ZIP to AppSail; do not upload the outer GitHub artifact archive or GitHub's source-code ZIP.
+Development project: **clausewise**, project ID **54566000000079016**, organization **60077364156**.
 
-The build includes Next's standalone runtime, production dependencies, public assets (including the PDF worker), compiled frontend assets, startup scripts and both database migrations. There is no install or build step on AppSail for this prebuilt ZIP. The GitHub job builds on Linux x64 to match the hosting platform.
+| Resource | Configuration | Current provisioning status |
+| --- | --- | --- |
+| `CWCommits` | Data Store commit index; `commit_key` must be unique | Created, table ID `54566000000077031` |
+| `CWLoginSlots` | Data Store login-rate slots; `slot_key` must be unique | Created, table ID `54566000000077390` |
+| `clausewise-54566000000079016` | Protected Stratus bucket; encryption on, caching off, versioning off | First console activation required; bucket creation not yet confirmed |
 
-To reproduce it locally on Linux x64 with Node.js 22.13+:
+Zoho rejected the initial bucket creation with: **User needs to be in session when accessing Stratus for the first time**. Open the [Ganesh console](https://console.catalyst.zoho.in/baas/60077364156/index), select **clausewise → Cloud Scale → Stratus**, and complete its initial activation. Then create the bucket named above, or complete creation through the connector after activation. Choose protected access, encryption enabled, versioning disabled and caching disabled. Do not upload contracts until this setup is verified.
+
+Tables are accessed only by the backend using Catalyst admin scope. Keep App User table permissions disabled; the application uses its own single-owner sign-in and enforces ownership on the server. No direct browser Data Store or Stratus permissions, public file links, or CORS grants are required.
+
+Schema and provisioning IDs are recorded in [`catalyst-resources.json`](../catalyst-resources.json). For another project or Production, create the same schema and bucket in that environment. This file is a resource manifest, not a CLI-generated `catalyst.json`.
+
+## Download the current build
+
+1. Open [GitHub Actions](https://github.com/ganesh12456/Clausewise/actions) and select the latest successful **Verify Clausewise** run on `main` containing this migration.
+2. Download **clausewise-appsail-build** and extract the download once.
+3. Upload the inner **clausewise-appsail.zip**. Old build artifacts from before this migration still require PostgreSQL; use the newest native-storage build.
+
+The ZIP includes the Next.js standalone server, modular Catalyst SDK packages, compiled assets, PDF worker and startup script. It does not contain database credentials, environment files, SQL migrations or a PostgreSQL runtime.
+
+## AppSail settings
+
+In **clausewise → Serverless → Compute → AppSail**, create a Catalyst-managed service:
+
+| Setting | Value |
+| --- | --- |
+| Name | `clausewise` |
+| Runtime | Node.js 22 |
+| Startup command | `node scripts/start.mjs --standalone` |
+| Memory | Start at 512 MB; measure actual use |
+| Port | AppSail default; the script reads `X_ZOHO_CATALYST_LISTEN_PORT` |
+
+Configure these protected runtime variables:
+
+| Variable | Value |
+| --- | --- |
+| `CATALYST_PROJECT_ID` | `54566000000079016` for the existing Development project |
+| `CATALYST_STRATUS_BUCKET` | `clausewise-54566000000079016` after bucket creation |
+| `APP_URL` | Exact assigned AppSail HTTPS origin, without a path or trailing slash |
+| `OWNER_EMAIL` | Your chosen sign-in email |
+| `OWNER_PASSWORD_HASH` | Output of the password helper |
+| `SESSION_SECRET` | Secret printed by the same helper; keep stable |
+
+Generate the owner settings in a private local terminal, with Node.js installed:
 
 ```bash
-npm ci
-npm run build:appsail
+node scripts/hash-password.mjs
 ```
 
-The result is `dist/clausewise-appsail.zip`. Generated deployment packages are not committed. Never build with private credentials embedded in `NEXT_PUBLIC_` variables. The packager strips root `.env*` files from the output; runtime secrets belong in Zoho's environment settings.
+The helper requires a password of at least 16 characters. Its input is visible in that private terminal. Keep the password yourself and enter only the generated hash and session secret into Zoho. Never commit these values. The app deliberately refuses to start with missing settings. Obtain the service's assigned endpoint during initial creation, then finish `APP_URL` and restart/redeploy before testing sign-in.
 
-## Create and upload
+Catalyst injects SDK credentials in gateway request headers. The backend initializes the current request with `@zcatalyst/auth` in admin scope and verifies its project matches `CATALYST_PROJECT_ID`. Do not configure refresh tokens, client secrets, or SDK credentials in the frontend. Serve this build in the same Catalyst project as its storage resources.
 
-The connected account has a `clausewise` Catalyst project (ID `54566000000079016`, organization `60077364156`). The development project contained no AppSail service when checked on 2026-10-25.
+Startup binds the server promptly and performs no SQL migration, network initialization or database provisioning. `/api/health` checks Data Store access, required unique constraints and the Stratus bucket.
 
-1. Open the [Ganesh Catalyst console](https://console.catalyst.zoho.in/baas/60077364156/index), select **clausewise**, and choose **Development** for initial verification.
-2. Open **Serverless → Compute → AppSail → Deploy from Console**.
-3. Choose **Catalyst-managed runtime**, name **clausewise**, runtime **Node.js 22**, and upload `clausewise-appsail.zip`.
-4. Set startup command to **`node scripts/start.mjs --standalone`**. Start with **512 MB** memory; assess actual use after verification. Leave the default port unless you need another; startup reads `X_ZOHO_CATALYST_LISTEN_PORT` and binds to `0.0.0.0`.
-5. Configure the protected environment values below. Create the app to obtain its assigned HTTPS endpoint if needed, set `APP_URL` to that exact origin, then restart/redeploy. The application deliberately refuses to start with missing settings.
-6. Deploy. Review the logs for **Database migration complete** followed by the Next.js ready message. The migration runs under a PostgreSQL advisory lock on each start and does not reset existing records.
+## CLI upload from GitHub
 
-| Environment variable | Required value |
-| --- | --- |
-| `DATABASE_URL` | Reachable PostgreSQL 14+ connection string with provider-verified TLS |
-| `APP_URL` | Exact assigned AppSail HTTPS origin, without a path or trailing slash |
-| `OWNER_EMAIL` | The owner's sign-in email |
-| `OWNER_PASSWORD_HASH` | Output of `npm run password:hash` in a private terminal |
-| `SESSION_SECRET` | Secret generated by the same command; keep stable |
+With Git, GitHub CLI, Node.js and Catalyst CLI installed, run in PowerShell:
 
-Use a password of at least 16 characters when running the password helper. Enter the hash and secret directly into Zoho's protected environment settings; keep the password in your password manager. No account credentials are shipped in the ZIP. Startup sets `NODE_ENV=production` and applies the schema before launching the standalone server.
+```powershell
+git clone https://github.com/ganesh12456/Clausewise.git
+cd Clausewise
+gh auth login
+gh run list --repo ganesh12456/Clausewise --branch main --status success --limit 5
+```
 
-**PostgreSQL is still required.** Catalyst Data Store is a different database and cannot be used as `DATABASE_URL`. AppSail hosts the application; it does not provision PostgreSQL. This change does not create or purchase a database. Confirm hosting quotas and database charges before enabling production resources.
+Use the run ID of the new native-storage build:
 
-## Verify before sharing the link
+```powershell
+gh run download RUN_ID --repo ganesh12456/Clausewise --name clausewise-appsail-build --dir .\dist\download
+Expand-Archive -Path .\dist\download\clausewise-appsail.zip -DestinationPath .\dist\appsail -Force
+catalyst login --dc in
+(Resolve-Path .\dist\appsail).Path
+catalyst init appsail --dc in
+```
 
-- Open the assigned AppSail endpoint followed by `/api/health`: expect HTTP 200 and `{"status":"ok"}`.
-- Open `/login`, sign in with the configured owner email and password, upload a TXT agreement, refresh, and download its original.
-- Create/publish a company standard, review a finding, record a negotiation decision, and export a review memo.
-- Add a commitment with a verified deadline and owner, then export its calendar reminder.
-- Open **Connections**, enter the Gemini API key and model, save and test. Gemini credentials are entered through the frontend after sign-in.
-- Restart/redeploy and verify that the agreement, original, decisions, commitment and AI connection persist.
-- Check an unauthenticated browser cannot access `/api/workspace` or `/api/settings/ai`.
+Replace `RUN_ID` with the actual number. During initialization choose the existing Ganesh/clausewise project, Catalyst-managed runtime, no sample app, the current repository as source, the absolute `dist/appsail` path as build path and Node.js 22. Let the CLI generate project configuration. Set the generated `app-config.json` command to `node scripts/start.mjs --standalone`, preserving its other fields.
 
-Use the **AppSail service URL** for testing. The general Catalyst project domain is not evidence that the AppSail app is deployed. The older Sites preview uses a separate runtime and dataset.
+```powershell
+catalyst deploy appsail --project 54566000000079016 --org 60077364156 --dc in
+```
 
-After development checks pass, deploy the same build into Production, configure that environment's own variables and exact `APP_URL`, then repeat verification. Preserve the old preview until the new service is verified.
+Set the runtime variables in AppSail Configuration and restart/redeploy. The CLI uploads the extracted build directory. This does not set up automatic deployment for future Git pushes.
 
-## Connector boundary
+## Verify before sharing
 
-The currently connected Zoho plugin can list/get AppSail services but exposes no create/upload deployment tool. Initial deployment requires the console or an authenticated Catalyst CLI. No AppSail deployment has been performed by adding this configuration.
+1. Open the assigned service URL plus `/api/health`: expect HTTP 200 and `{"status":"ok","storage":"catalyst"}`.
+2. Sign in at `/login`. Upload a readable TXT agreement, refresh, and download its original.
+3. Create/publish a company standard, review a finding and record a decision.
+4. Create a commitment, verify its date and export its calendar reminder.
+5. Open Connections and save/test the Gemini API key and model through the frontend.
+6. Restart/redeploy and confirm the same agreements, originals, decisions and connection remain.
+7. Use a signed-out browser to confirm private API routes return 401.
 
-Official references: [AppSail introduction](https://docs.catalyst.zoho.com/en/serverless/help/appsail/introduction/), [supported runtimes](https://docs.catalyst.zoho.com/en/serverless/help/appsail/catalyst-managed-runtimes/key-concepts/), [console upload](https://docs.catalyst.zoho.com/en/serverless/help/appsail/catalyst-managed-runtimes/deploy-from-console/), [Next.js standalone output](https://nextjs.org/docs/app/api-reference/config/next-config-js/output).
+The general project domain is not an AppSail deployment URL. The earlier Sites preview is a separate runtime and dataset. Runtime AppSail verification and Stratus upload/download remain pending until activation and deployment succeed; a passing local test suite does not establish them.
+
+## Storage limits and cleanup
+
+The workspace remains single-owner. Data Store holds compact commit and rate-limit metadata. Stratus holds UTF-8 review snapshots and original binaries; this avoids Data Store text-field limits and preserves emoji/non-BMP document characters.
+
+Each workspace mutation writes one immutable snapshot and publishes it with a uniquely constrained commit row. Concurrent commits from the same base revision return a conflict instead of overwriting each other. Original uploads are staged before publication. Deletion immediately removes accessible records and linked commitments in the committed snapshot; original-file and superseded-snapshot cleanup is retried on later reads/saves when Stratus is temporarily unavailable.
+
+Review data is capped at 32 MB per workspace snapshot; original uploads remain capped at 20 MB, 100 pages and 1.5 million extracted characters. A mutation rewrites the review snapshot, so this initial release is not intended for large enterprise portfolios. There is no automatic retention scheduler. A process crash or an unconfirmed publication may leave an unreferenced staged object. Check Stratus inventory and committed references before manual orphan cleanup; never blindly delete an owner prefix. Do not enable bucket versioning without a separate version-retention policy.
+
+This migration does not automatically copy or delete data from an older PostgreSQL or Sites workspace. Download originals and export review notes before switching if you have existing data. API keys must be entered again in the new workspace. Preserve the old deployment until the new one is verified.
+
+References: [Modular SDK authentication](https://docs.catalyst.zoho.com/en/sdk/javascript/v1/auth-config/node-consideration/), [Data Store](https://docs.catalyst.zoho.com/en/sdk/javascript/v1/cloudscale/datastore/insert-rows/), [Stratus uploads](https://docs.catalyst.zoho.com/en/sdk/javascript/v1/cloudscale/stratus/upload-object/), [AppSail CLI](https://docs.catalyst.zoho.com/en/cli/v1/deploy-resources/deploy-appsail/).

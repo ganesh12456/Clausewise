@@ -5,17 +5,6 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: clausewise
-          POSTGRES_PASSWORD: ci-only-password
-          POSTGRES_DB: clausewise_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd pg_isready --health-interval 10s
-          --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,8 +13,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-        env:
-          TEST_DATABASE_URL: postgresql://clausewise:ci-only-password@localhost:5432/clausewise_test
       - run: npm run typecheck
       - run: npm run build:appsail
       - uses: actions/upload-artifact@v4
@@ -34,17 +21,3 @@ jobs:
           path: dist/clausewise-appsail.zip
           if-no-files-found: error
           retention-days: 14
-      - name: Verify local PostgreSQL setup
-        run: |
-          node --input-type=module -e "import { setupLocal } from './scripts/setup-local.mjs'; await setupLocal(process.cwd(), 'ci-only-local-password');"
-          npm run db:up
-          npm run db:migrate:local
-          npm run db:migrate:local
-          node --env-file=.env.local --input-type=module -e "import { Pool } from 'pg'; import assert from 'node:assert/strict'; const db = new Pool({ connectionString: process.env.DATABASE_URL }); try { const r = await db.query(\"SELECT table_name FROM information_schema.tables WHERE table_schema='public'\"); for (const name of ['records','originals','events','login_attempts','ai_connections']) assert(r.rows.some(row => row.table_name === name), name + ' missing'); console.log('Local PostgreSQL schema ready; repeated migration preserved schema'); } finally { await db.end(); }"
-      - name: Stop local PostgreSQL
-        if: always()
-        run: |
-          if [ -f .env.local ]; then
-            npm run db:down
-            rm .env.local
-          fi

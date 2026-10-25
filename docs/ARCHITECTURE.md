@@ -1,46 +1,47 @@
 # Clausewise architecture
 
-## Request and render boundaries
+## Boundaries
 
-The Next.js page authenticates on the server and loads the owner's initial workspace snapshot. That avoids a second client fetch before the first useful view. The client receives business records and connection status, never provider credentials. The page is dynamically rendered per request.
+Next.js authenticates on the server and loads the owner workspace before rendering. The browser receives business records and connection status; it never receives Catalyst admin credentials, Stratus keys or Gemini secrets. Screen components, the injected HTTP gateway, extraction strategies and the workspace hook retain their existing responsibilities.
 
-`app/workspace.tsx` coordinates navigation and dialogs. Screen components receive typed records and intent callbacks. `useWorkspace` owns loading, mutations, operation feedback and refresh ordering. It depends on the narrow `WorkspaceGateway` interface; `httpWorkspaceGateway` implements the real API transport. Document extraction is separate from upload transport, with one strategy each for PDF, Word and plain text. PDF and Word libraries load only when the relevant format is used.
-
-API routes authenticate, check the origin, bound the input, and establish a database transaction. `lib/storage.ts` composes the record application service with the PostgreSQL adapter and maps application errors to HTTP errors. `RecordService` contains ownership, revision and business-rule coordination. PostgreSQL queries live in `PostgresWorkspaceRepository`. Document originals and records are inserted together in the existing transaction. Foreign keys handle linked commitment and original deletion.
+`RecordService` applies the registered contract, company-standard and commitment policies through `RecordReader`, `RecordWriter` and `AuditTrail` ports. `SnapshotWorkspaceRepository` implements those ports over one transaction-local workspace state. `CloudWorkspace` coordinates uploads, downloads and domain operations. `CatalystStore` publishes a successful operation through independent `CommitIndex` and `ObjectStorage` ports. Composition in `services.ts` chooses Data Store and Stratus using a request-scoped modular SDK instance.
 
 ```mermaid
 flowchart TD
-  A[Screen components] --> B[Workspace controller]
-  B --> C[WorkspaceGateway port]
-  C --> D[HTTP adapter and routes]
-  D --> E[RecordService]
-  E --> F[WorkspaceRepository port]
-  F --> G[PostgreSQL adapter]
+  A[API and server page] --> B[CloudWorkspace]
+  B --> C[RecordService]
+  C --> D[Workspace repository]
+  B --> E[CatalystStore]
+  E --> F[CommitIndex port]
+  E --> G[ObjectStorage port]
+  F --> H[Data Store]
+  G --> I[Stratus]
 ```
 
-## How SOLID is applied
+## Publication and concurrency
 
-| Principle             | Concrete boundary                                                                                                                                                                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Single responsibility | Views render business records; the controller coordinates operations; extractors read file formats; the gateway sends requests; the record service applies application decisions; the repository persists them.                                                                 |
-| Open/closed           | A new document extractor can be registered without rewriting the upload controller. `RecordService` receives a registry of `RecordPolicy` strategies; a new policy behaviour does not require changing the service's command handling.                                          |
-| Liskov substitution   | The in-memory repository used by application tests satisfies the same repository port as PostgreSQL. Application-level ownership, revision and audit behaviour runs through both. A substitute must preserve owner scoping and transactional guarantees required by its caller. |
-| Interface segregation | `RecordReader`, `RecordWriter` and `AuditTrail` describe separate needs. Validation policies receive a reader, while the service composes those capabilities. Screen props expose only the intents that screen needs.                                                           |
-| Dependency inversion  | Application decisions depend on repository ports, and client orchestration depends on the gateway port. Composition chooses PostgreSQL and HTTP at the boundary.                                                                                                                |
+The workspace is single-owner. Each mutation loads the latest immutable UTF-8 snapshot, copies it, applies business changes and audit entries, stages the new JSON in Stratus, then inserts a Data Store row with a unique owner/revision commit key. That unique insert is the publication point. Competing writers can publish only one snapshot for a revision; the loser returns 409. A callback error never publishes its draft.
 
-The repository test double does not prove SQL locking or cascade behaviour; storage tests execute the migration and real queries using embedded PostgreSQL locally and a PostgreSQL 16 service in CI. These tests complement the application port tests.
+Data Store stores compact ASCII-safe metadata, not large document text or user-supplied query literals. Owner identifiers are hashed for queries; validated commit keys are the only interpolated strings. Revision values from the API are normalized to numbers. Snapshot payload hashes and owner references are checked on load. IDs and filenames supplied by clients never become arbitrary Stratus paths.
 
-## Behaviour worth preserving
+The new snapshot contains agreement changes, linked commitment deletion, activity entries and original-object references together. Binary uploads are staged first. Failed or unconfirmed publication is treated carefully: a confirmed competing commit permits cleanup of the losing JSON, while an unknown outcome preserves staged files and asks the user to refresh. A lost HTTP response after a confirmed publication is recovered as success.
 
-- Owner scoping is applied to every record lookup and mutation.
-- Mutations lock the current record inside a transaction, reject stale revisions and preserve the original document text, filename, extraction coverage and hash.
-- Linked agreement validation is a read-only lookup; it avoids acquiring a second write lock solely to validate a commitment.
-- Standard edits create a draft. Existing finding snapshots keep their original rule/version context.
-- Accepting a proposal records a review decision. It neither changes the original document nor signs the agreement.
-- Refreshes use request ordering so an older response cannot replace a newer workspace snapshot.
-- Partially completed multi-file imports refresh the saved records and report how many were saved before a failure.
-- API keys remain encrypted in PostgreSQL with owner-bound AES-GCM authentication. Frontend connection management and its provider checks remain separate from agreement presentation.
+Successful saves queue superseded snapshots and deleted originals for cleanup. Failed cleanup remains in the committed state and is retried on later authenticated reads and saves. A reader that races snapshot cleanup retries against the latest commit. Crashes before publication may leave unreferenced objects; there is no unattended retention/orphan-recovery job in this release. Deletion becomes effective in the app immediately, while physical removal can remain pending during a storage outage.
 
-## Current scope
+## Authentication and connections
 
-The record service and workspace flow have explicit ports and policies. Authentication and AI connections retain their existing focused modules; this refactor does not claim a wholesale enterprise domain architecture. PostgreSQL, the protected application origin, owner credentials and session secret must still be configured in Zoho. See `ZOHO_DEPLOYMENT.md` for deployment settings.
+The existing scrypt owner password and signed HttpOnly session cookie remain. Ten uniquely constrained Data Store slots per owner and fixed 15-minute window limit all sign-in attempts across instances, including successful ones. Expired slots receive bounded cleanup after a later successful allocation. This is a fixed-window limit, not a rolling-window claim.
+
+The SDK uses Catalyst gateway credentials for the current request, verifies the project ID and initializes admin scope. There is no shared application credential cache, no refresh-token configuration in the frontend, and no direct browser table access. Keep Data Store App User permissions disabled and Stratus protected. All application operations still apply owner authorization.
+
+Gemini credentials retain owner-bound AES-256-GCM encryption derived from SESSION_SECRET. The connection adapter publishes encrypted credential changes through the same native store. A model-access test cannot mark a replacement key verified. The API never returns a saved key.
+
+## SOLID and verification
+
+Domain decisions depend on repository ports; snapshot publication depends on commit and object ports; frontend orchestration depends on the gateway port. Document formats and record kinds use independent strategies. Validation policies receive a reader, not an all-purpose SDK client. Cloud credentials, transport details and persistence decisions stay outside presentation components.
+
+Tests substitute the narrow persistence ports to exercise real domain and publication logic, including concurrent writers and failure recovery. SDK transport tests verify response envelopes against the installed modular packages. The actual Development Data Store uniqueness and latest-revision query have also been probed, with the temporary verification row removed. These checks do not prove Stratus/AppSail runtime behavior; that remains a deployment verification step after activation.
+
+## Practical limits
+
+Each mutation rewrites review data, capped at 32 MB per workspace snapshot. Original binaries are separate objects capped at 20 MB per upload. This design favors the current private review workspace over enterprise portfolio scale. It does not claim distributed multi-table SQL transactions, vector retrieval, OCR, automatic email scheduling or immutable legal audit certification. See the deployment guide for setup and remaining verification.

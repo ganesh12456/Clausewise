@@ -1,14 +1,48 @@
-import {spawn} from 'node:child_process';
-import {migrate} from './migrate.mjs';
-process.env.NODE_ENV = 'production';
-for(const name of ['DATABASE_URL','APP_URL','OWNER_EMAIL','OWNER_PASSWORD_HASH','SESSION_SECRET'])if(!process.env[name])throw new Error(`${name} is required; see docs/ZOHO_DEPLOYMENT.md`);
-if(process.env.SESSION_SECRET.length<32)throw new Error('SESSION_SECRET must be at least 32 characters');
-if(!/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(process.env.OWNER_PASSWORD_HASH))throw new Error('Generate OWNER_PASSWORD_HASH with npm run password:hash');
-if(!process.env.APP_URL.startsWith('https://')&&process.env.NODE_ENV==='production')throw new Error('APP_URL must use HTTPS');
-await migrate();
-const port=process.env.X_ZOHO_CATALYST_LISTEN_PORT||process.env.ZC_SLATE_PORT||process.env.PORT||'3000';
-const args=process.argv.includes('--standalone')?['server.js']:['node_modules/next/dist/bin/next','start','--hostname','0.0.0.0','--port',port];
-const child=spawn(process.execPath,args,{stdio:'inherit',env:{...process.env,PORT:port,HOSTNAME:'0.0.0.0'}});
-for(const sig of ['SIGTERM','SIGINT'])process.on(sig,()=>child.kill(sig));
-child.on('exit',code=>process.exit(code??1));
-child.on('error',error=>{console.error(error.message);process.exit(1);});
+import { spawn } from "node:child_process";
+process.env.NODE_ENV = "production";
+for (const name of [
+  "CATALYST_PROJECT_ID",
+  "CATALYST_STRATUS_BUCKET",
+  "APP_URL",
+  "OWNER_EMAIL",
+  "OWNER_PASSWORD_HASH",
+  "SESSION_SECRET",
+])
+  if (!process.env[name])
+    throw new Error(`${name} is required; see docs/ZOHO_APPSAIL.md`);
+if (process.env.SESSION_SECRET.length < 32)
+  throw new Error("SESSION_SECRET must be at least 32 characters");
+if (
+  !/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(process.env.OWNER_PASSWORD_HASH)
+)
+  throw new Error("Generate OWNER_PASSWORD_HASH with npm run password:hash");
+if (
+  !process.env.APP_URL.startsWith("https://") &&
+  process.env.NODE_ENV === "production"
+)
+  throw new Error("APP_URL must use HTTPS");
+const port =
+  process.env.X_ZOHO_CATALYST_LISTEN_PORT ||
+  process.env.ZC_SLATE_PORT ||
+  process.env.PORT ||
+  "3000";
+const args = process.argv.includes("--standalone")
+  ? ["server.js"]
+  : [
+      "node_modules/next/dist/bin/next",
+      "start",
+      "--hostname",
+      "0.0.0.0",
+      "--port",
+      port,
+    ];
+const child = spawn(process.execPath, args, {
+  stdio: "inherit",
+  env: { ...process.env, PORT: port, HOSTNAME: "0.0.0.0" },
+});
+for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => child.kill(sig));
+child.on("exit", (code) => process.exit(code ?? 1));
+child.on("error", (error) => {
+  console.error(error.message);
+  process.exit(1);
+});
